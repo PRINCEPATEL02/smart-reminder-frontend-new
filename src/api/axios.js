@@ -1,18 +1,30 @@
 import axios from 'axios';
 
-// VITE_API_URL = host only (e.g. http://localhost:5000)
-// We append /api so all route calls resolve correctly
-const BASE_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api`;
+// ── URL Configuration ─────────────────────────────────────────────────────────
+// Primary: localhost (from .env or hardcoded default)
+// Fallback: Render production backend (used automatically if localhost is down)
+const LOCAL_URL  = import.meta.env.VITE_API_URL;
+const RENDER_URL = import.meta.env.VITE_RENDER_URL;
+
+const LOCAL_BASE  = `${LOCAL_URL}/api`;
+const RENDER_BASE = `${RENDER_URL}/api`;
+
+// Start with localhost
+let activeBase = LOCAL_BASE;
+let usingRender = false;
 
 const api = axios.create({
-  baseURL: BASE_URL,
-  timeout: 15000,
+  baseURL: activeBase,
+  timeout: 8000,               // shorter timeout so fallback kicks in fast
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Request interceptor: attach access token
+// ── Request interceptor: attach access token ────────────────────────────────
 api.interceptors.request.use(
   (config) => {
+    // Always use the currently active base URL
+    config.baseURL = activeBase;
+
     const token = localStorage.getItem('accessToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -22,23 +34,48 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor: handle token expiry & refresh
+// ── Response interceptor: fallback + token refresh ──────────────────────────
 let isRefreshing = false;
-let failedQueue = [];
+let failedQueue  = [];
 
 const processQueue = (error, token = null) => {
   failedQueue.forEach((prom) => {
     if (error) prom.reject(error);
-    else prom.resolve(token);
+    else       prom.resolve(token);
   });
   failedQueue = [];
 };
+
+/**
+ * Returns true for errors that indicate the server is unreachable
+ * (network error, ECONNREFUSED, timeout before any response).
+ */
+const isConnectError = (error) =>
+  !error.response &&                         // no HTTP response at all
+  (error.code === 'ERR_NETWORK' ||
+   error.code === 'ECONNABORTED' ||
+   error.message === 'Network Error');
 
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
+    // ── Localhost → Render fallback ────────────────────────────────────────
+    if (isConnectError(error) && !usingRender && !originalRequest._fallback) {
+      console.warn('[axios] localhost unreachable – switching to Render backend');
+      usingRender  = true;
+      activeBase   = RENDER_BASE;
+
+      // Retry the failed request against Render
+      originalRequest._fallback = true;
+      originalRequest.baseURL   = RENDER_BASE;
+      // Rebuild the full URL (replace local origin with render origin)
+      originalRequest.url = originalRequest.url?.replace(LOCAL_BASE, RENDER_BASE) ?? originalRequest.url;
+      return api(originalRequest);
+    }
+
+    // ── 401 / Token refresh ────────────────────────────────────────────────
     if (
       error.response?.status === 401 &&
       error.response?.data?.code === 'TOKEN_EXPIRED' &&
@@ -62,12 +99,12 @@ api.interceptors.response.use(
         const refreshToken = localStorage.getItem('refreshToken');
         if (!refreshToken) throw new Error('No refresh token');
 
-        const { data } = await axios.post(`${BASE_URL}/auth/refresh`, { refreshToken });
-        localStorage.setItem('accessToken', data.accessToken);
+        const { data } = await axios.post(`${activeBase}/auth/refresh`, { refreshToken });
+        localStorage.setItem('accessToken',  data.accessToken);
         localStorage.setItem('refreshToken', data.refreshToken);
 
-        api.defaults.headers.Authorization = `Bearer ${data.accessToken}`;
-        originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
+        api.defaults.headers.Authorization      = `Bearer ${data.accessToken}`;
+        originalRequest.headers.Authorization   = `Bearer ${data.accessToken}`;
         processQueue(null, data.accessToken);
 
         return api(originalRequest);
