@@ -3,8 +3,8 @@ import axios from 'axios';
 // ── URL Configuration ─────────────────────────────────────────────────────────
 // Primary: localhost (from .env or hardcoded default)
 // Fallback: Render production backend (used automatically if localhost is down)
-const LOCAL_URL  = import.meta.env.VITE_API_URL;
-const RENDER_URL = import.meta.env.VITE_RENDER_URL;
+const LOCAL_URL  = import.meta.env.VITE_API_URL   || 'http://localhost:5000';
+const RENDER_URL = import.meta.env.VITE_RENDER_URL || 'https://smart-reminder-backend-nhvj.onrender.com';
 
 const LOCAL_BASE  = `${LOCAL_URL}/api`;
 const RENDER_BASE = `${RENDER_URL}/api`;
