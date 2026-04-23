@@ -1,10 +1,10 @@
 import axios from 'axios';
 
 // ── URL Configuration ─────────────────────────────────────────────────────────
-// Always use the env variable — no localhost fallback logic.
-// For local dev:  .env.development → VITE_API_URL=http://localhost:5000
-// For production: .env.production  → VITE_API_URL=https://smart-reminder-backend-nhvj.onrender.com
-const BASE_URL = `${import.meta.env.VITE_API_URL}/api`;
+// For local dev:  .env.development -> VITE_API_URL=http://localhost:5000
+// For production: .env.production / Render env -> VITE_API_URL=https://your-backend.onrender.com
+const API_ORIGIN = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+const BASE_URL = `${API_ORIGIN}/api`;
 
 const api = axios.create({
   baseURL: BASE_URL,
