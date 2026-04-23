@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
-  Bell, LayoutDashboard, Calendar, BarChart2,
-  Moon, Sun, LogOut, Menu, X, Zap, User,
+  LayoutDashboard, Calendar, BarChart2,
+  Moon, Sun, LogOut, Menu, X, Zap, Download,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import NotificationBell from './NotificationBell';
+import { usePwaInstall } from '../hooks/usePwaInstall';
 
 const navItems = [
   { to: '/dashboard', label: 'Dashboard', Icon: LayoutDashboard },
@@ -17,6 +18,7 @@ const navItems = [
 export default function Navbar() {
   const { user, logout } = useAuth();
   const { dark, toggleDark } = useTheme();
+  const { canInstall, install } = usePwaInstall();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -62,6 +64,17 @@ export default function Navbar() {
           {/* Right controls */}
           <div className="flex items-center gap-2">
             <NotificationBell />
+
+            {canInstall && (
+              <button
+                onClick={install}
+                className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+                aria-label="Install app"
+                title="Install app"
+              >
+                <Download size={18} />
+              </button>
+            )}
 
             <button
               onClick={toggleDark}

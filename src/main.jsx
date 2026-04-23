@@ -7,6 +7,7 @@ import App from './App';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import './index.css';
+import { registerSW } from 'virtual:pwa-register';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,14 +23,7 @@ const queryClient = new QueryClient({
   },
 });
 
-// Register service worker
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .register('/sw.js')
-      .catch((err) => console.error('SW registration failed:', err));
-  });
-}
+registerSW({ immediate: true });
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
