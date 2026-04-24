@@ -1,8 +1,8 @@
 import { useState, lazy, Suspense } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, CheckCircle, Clock, AlertTriangle, Zap,
-  TrendingUp, Filter, Search, RefreshCw, Sparkles,
+  Search, Sparkles, Flame,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import api from '../api/axios';
@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import ReminderCard from '../components/ReminderCard';
 import ReminderForm from '../components/ReminderForm';
 import LoadingSpinner from '../components/LoadingSpinner';
+import toast from 'react-hot-toast';
 
 const FILTER_OPTIONS = [
   { value: '', label: 'All' },
@@ -27,6 +28,7 @@ const SORT_OPTIONS = [
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [statusFilter, setStatusFilter] = useState('');
   const [search, setSearch] = useState('');
@@ -67,9 +69,29 @@ export default function Dashboard() {
   const reminders = allData?.data || [];
   const pagination = allData?.pagination;
   const todayReminders = todayData || [];
+  const todayDailyHabits = todayReminders.filter((r) => r.isHabit && r.recurrence === 'daily');
+  const dailyHabitsDone = todayDailyHabits.filter((r) => r.status === 'completed').length;
   const todayPending = todayReminders.filter((r) => r.status === 'pending').length;
   const todayCompleted = todayReminders.filter((r) => r.status === 'completed').length;
   const upcoming7 = upcomingData?.length || 0;
+  const activeHabits = reminders.filter((r) => r.isHabit).length;
+  const dailyStreak = analyticsData?.dailyHabitStreak || 0;
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['reminders'] });
+    qc.invalidateQueries({ queryKey: ['reminders', 'today'] });
+    qc.invalidateQueries({ queryKey: ['reminders', 'upcoming'] });
+    qc.invalidateQueries({ queryKey: ['analytics'] });
+  };
+
+  const completeTodayMutation = useMutation({
+    mutationFn: (id) => api.put(`/reminders/${id}`, { status: 'completed' }),
+    onSuccess: () => {
+      invalidate();
+      toast.success('Habit checked for today');
+    },
+    onError: () => toast.error('Could not mark habit complete'),
+  });
 
   const stats = [
     {
@@ -87,10 +109,10 @@ export default function Dashboard() {
       bg: 'bg-emerald-50 dark:bg-emerald-900/20',
     },
     {
-      label: 'Upcoming (7d)',
-      value: upcoming7,
-      sub: 'need attention',
-      icon: <Zap size={20} className="text-amber-500" />,
+      label: 'Active Habits',
+      value: activeHabits,
+      sub: `${dailyStreak} day daily streak`,
+      icon: <Flame size={20} className="text-amber-500" />,
       bg: 'bg-amber-50 dark:bg-amber-900/20',
     },
     {
@@ -122,7 +144,7 @@ export default function Dashboard() {
           className="btn-primary flex items-center gap-2 w-full sm:w-auto justify-center"
         >
           <Plus size={18} />
-          New Reminder
+          New Reminder / Habit
         </button>
       </div>
 
@@ -143,10 +165,17 @@ export default function Dashboard() {
       {/* Today's schedule */}
       {todayReminders.length > 0 && (
         <div className="card">
-          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4 flex items-center gap-2">
-            <Clock size={15} className="text-primary-500" />
-            Today's Schedule
-          </h2>
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+              <Clock size={15} className="text-primary-500" />
+              Today's Schedule
+            </h2>
+            {todayDailyHabits.length > 0 && (
+              <span className="text-xs px-3 py-1 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">
+                Daily habits {dailyHabitsDone}/{todayDailyHabits.length}
+              </span>
+            )}
+          </div>
           {todayLoading ? (
             <div className="flex justify-center py-4"><LoadingSpinner /></div>
           ) : (
@@ -159,14 +188,35 @@ export default function Dashboard() {
                       ? 'opacity-50'
                       : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'
                   }`}>
+                    {r.isHabit ? (
+                      <button
+                        type="button"
+                        disabled={r.status === 'completed' || completeTodayMutation.isPending}
+                        onClick={() => completeTodayMutation.mutate(r._id)}
+                        className={`h-5 w-5 shrink-0 rounded border-2 flex items-center justify-center transition-all ${
+                          r.status === 'completed'
+                            ? 'bg-emerald-500 border-emerald-500 text-white'
+                            : 'border-slate-300 dark:border-slate-600 hover:border-emerald-500'
+                        }`}
+                        title="Mark today's habit done"
+                      >
+                        <CheckCircle size={12} />
+                      </button>
+                    ) : (
                     <div className={`h-2 w-2 rounded-full shrink-0 ${
                       r.status === 'completed' ? 'bg-emerald-400' :
                       r.priority === 'urgent' ? 'bg-red-500' :
                       r.priority === 'high' ? 'bg-orange-400' : 'bg-primary-500'
                     }`} />
+                    )}
                     <p className={`text-sm flex-1 ${r.status === 'completed' ? 'line-through text-slate-400' : 'text-slate-800 dark:text-slate-200'}`}>
                       {r.title}
                     </p>
+                    {r.isHabit && (
+                      <span className="text-[11px] px-2 py-1 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 shrink-0">
+                        {r.streakCurrent || 0} streak
+                      </span>
+                    )}
                     <span className="text-xs text-slate-400 dark:text-slate-500 shrink-0">
                       {format(new Date(r.dueDate), 'h:mm a')}
                     </span>

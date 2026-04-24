@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { X, Sparkles, Calendar, Clock, Tag, AlignLeft, Zap } from 'lucide-react';
+import { X, Sparkles, Calendar, Clock, Tag, AlignLeft, Zap, Repeat, CheckSquare } from 'lucide-react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
@@ -24,6 +24,7 @@ const defaultForm = {
   category: 'other',
   tags: '',
   recurrence: 'none',
+  isHabit: false,
 };
 
 export default function ReminderForm({ reminder = null, onClose }) {
@@ -39,6 +40,7 @@ export default function ReminderForm({ reminder = null, onClose }) {
         category: reminder.category || 'other',
         tags: (reminder.tags || []).join(', '),
         recurrence: reminder.recurrence || 'none',
+        isHabit: Boolean(reminder.isHabit),
       };
     }
     const now = new Date();
@@ -85,6 +87,7 @@ export default function ReminderForm({ reminder = null, onClose }) {
     if (!form.title.trim()) errs.title = 'Title is required';
     if (!form.dueDate) errs.dueDate = 'Date is required';
     if (!form.dueTime) errs.dueTime = 'Time is required';
+    if (form.isHabit && form.recurrence === 'none') errs.recurrence = 'Habits need a repeat schedule';
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -97,7 +100,12 @@ export default function ReminderForm({ reminder = null, onClose }) {
       .split(',')
       .map((t) => t.trim())
       .filter(Boolean);
-    mutation.mutate({ ...form, dueDate: dueDate.toISOString(), tags });
+    mutation.mutate({
+      ...form,
+      recurrence: form.isHabit ? form.recurrence : 'none',
+      dueDate: dueDate.toISOString(),
+      tags,
+    });
   };
 
   const applySuggestion = (suggestion) => {
@@ -125,7 +133,7 @@ export default function ReminderForm({ reminder = null, onClose }) {
               <Zap size={15} className="text-white" />
             </div>
             <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-              {isEditing ? 'Edit Reminder' : 'New Reminder'}
+              {isEditing ? (form.isHabit ? 'Edit Habit' : 'Edit Reminder') : (form.isHabit ? 'New Habit' : 'New Reminder')}
             </h2>
           </div>
           <button onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all">
@@ -169,6 +177,34 @@ export default function ReminderForm({ reminder = null, onClose }) {
               autoFocus
             />
             {errors.title && <p className="mt-1 text-xs text-red-500">{errors.title}</p>}
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-4 bg-slate-50/80 dark:bg-slate-900/40">
+            <div className="flex items-start gap-3">
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({
+                  ...f,
+                  isHabit: !f.isHabit,
+                  recurrence: !f.isHabit && f.recurrence === 'none' ? 'daily' : f.recurrence,
+                }))}
+                className={`mt-0.5 h-5 w-5 rounded border-2 flex items-center justify-center transition-all ${
+                  form.isHabit
+                    ? 'border-primary-500 bg-primary-500 text-white'
+                    : 'border-slate-300 dark:border-slate-600 text-transparent'
+                }`}
+              >
+                <CheckSquare size={12} />
+              </button>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  Track as habit
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Habits repeat automatically and build a streak when you check them off on time.
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Description */}
@@ -248,12 +284,21 @@ export default function ReminderForm({ reminder = null, onClose }) {
               </select>
             </div>
             <div>
-              <label className="label">Repeat</label>
-              <select className="input capitalize" value={form.recurrence} onChange={set('recurrence')}>
+              <label className="label">
+                <Repeat size={13} className="inline mr-1" />
+                Repeat
+              </label>
+              <select
+                className={`input capitalize ${errors.recurrence ? 'border-red-400' : ''}`}
+                value={form.recurrence}
+                onChange={set('recurrence')}
+                disabled={!form.isHabit}
+              >
                 {RECURRENCES.map((r) => (
                   <option key={r} value={r} className="capitalize">{r}</option>
                 ))}
               </select>
+              {errors.recurrence && <p className="mt-1 text-xs text-red-500">{errors.recurrence}</p>}
             </div>
           </div>
 
@@ -287,7 +332,7 @@ export default function ReminderForm({ reminder = null, onClose }) {
               ) : (
                 <Zap size={15} />
               )}
-              {isEditing ? 'Save Changes' : 'Create Reminder'}
+              {isEditing ? 'Save Changes' : form.isHabit ? 'Create Habit' : 'Create Reminder'}
             </button>
           </div>
         </form>

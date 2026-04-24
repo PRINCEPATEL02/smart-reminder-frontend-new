@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Check, Trash2, Edit2, Clock, RefreshCw, Bell,
-  ChevronDown, Tag, Repeat, MoreHorizontal,
+  Tag, Repeat, MoreHorizontal, Flame,
 } from 'lucide-react';
 import { format, formatDistanceToNow, isPast } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -68,6 +68,7 @@ export default function ReminderCard({ reminder, compact = false }) {
 
   const isOverdue = isPast(new Date(reminder.dueDate)) && reminder.status === 'pending';
   const isDone = reminder.status === 'completed';
+  const isHabit = Boolean(reminder.isHabit);
 
   return (
     <>
@@ -87,6 +88,7 @@ export default function ReminderCard({ reminder, compact = false }) {
             <button
               onClick={() => completeMutation.mutate()}
               disabled={completeMutation.isPending}
+              title={isHabit ? 'Mark habit done' : 'Mark complete'}
               className="mt-0.5 h-5 w-5 shrink-0 rounded-full border-2 border-slate-300 dark:border-slate-600 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all flex items-center justify-center group-hover:border-emerald-400"
             >
               {completeMutation.isPending && (
@@ -126,7 +128,7 @@ export default function ReminderCard({ reminder, compact = false }) {
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200">
                   <Edit2 size={14} /> Edit
                 </button>
-                {reminder.status !== 'completed' && (
+                {reminder.status !== 'completed' && !isHabit && (
                   <>
                     <button onClick={() => { snoozeMutation.mutate(30); setMenuOpen(false); }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200">
@@ -166,10 +168,21 @@ export default function ReminderCard({ reminder, compact = false }) {
           <span className="badge bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 capitalize">
             {reminder.category}
           </span>
+          {isHabit && (
+            <span className="badge bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300">
+              habit
+            </span>
+          )}
           {reminder.recurrence !== 'none' && (
             <span className="badge bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 flex items-center gap-1">
               <Repeat size={9} />
               {reminder.recurrence}
+            </span>
+          )}
+          {isHabit && (
+            <span className="badge bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 flex items-center gap-1">
+              <Flame size={9} />
+              {reminder.streakCurrent || 0} day streak
             </span>
           )}
           {isOverdue && (
@@ -187,7 +200,10 @@ export default function ReminderCard({ reminder, compact = false }) {
               : 'text-slate-500 dark:text-slate-400'
           }`}>
             <Clock size={11} />
-            <span>{format(new Date(reminder.dueDate), 'MMM d, yyyy · h:mm a')}</span>
+            <span>
+              {isHabit ? 'Check in by ' : ''}
+              {format(new Date(reminder.dueDate), 'MMM d, yyyy · h:mm a')}
+            </span>
           </div>
           <span className="text-xs text-slate-400 dark:text-slate-500">
             {formatDistanceToNow(new Date(reminder.dueDate), { addSuffix: true })}
